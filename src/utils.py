@@ -7,6 +7,7 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 from math import sqrt
+from torch.cuda.amp import autocast, GradScaler
 
 
 def train(model, device, train_loader, optimizer, epoch):
@@ -96,3 +97,76 @@ def show_image(image, label):
     plt.imshow(image.squeeze())
     plt.title(f"Label: {label}")
     plt.show()
+
+
+# Mixed precision training function
+def train_mp(model, device, train_loader, optimizer, epoch, scaler):
+    model.train()
+    train_loss = 0
+    correct = 0
+    total = 0
+    pbar = tqdm(train_loader)
+
+    for batch_idx, (data, target) in enumerate(pbar):
+        data, target = data.to(device), target.to(device)
+        optimizer.zero_grad()
+
+        # Mixed precision training: Use autocast for forward pass
+        with autocast():
+            output = model(data)
+            criterion = nn.CrossEntropyLoss()
+            loss = criterion(output, target)
+
+        # Backward pass with scaled gradients
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
+
+        # Compute accuracy
+        train_loss += loss.item()  # accumulate batch loss
+        _, pred = output.max(1)
+        correct += pred.eq(target).sum().item()
+        total += target.size(0)
+
+        # Update progress bar
+        pbar.set_description(desc=f"loss={loss.item():.4f} batch_id={batch_idx}")
+
+    # Compute average loss and accuracy for the epoch
+    avg_loss = train_loss / len(train_loader.dataset)
+    accuracy = 100.0 * correct / total
+
+    print(
+        f"\nEpoch {epoch}: Train set: Average loss: {avg_loss:.4f}, Accuracy: {correct}/{total} ({accuracy:.2f}%)\n"
+    )
+    return avg_loss, accuracy
+
+
+def test_mp(model, device, test_loader):
+    model.eval()
+    test_loss = 0
+    correct = 0
+
+    with torch.no_grad():
+        for data, target in test_loader:
+            data, target = data.to(device), target.to(device)
+            output = model(data)
+
+            # Compute loss
+            criterion = nn.CrossEntropyLoss()
+            loss = criterion(output, target)
+            test_loss += loss.item()
+
+            # Compute accuracy
+            _, pred = output.max(1)
+            correct += pred.eq(target).sum().item()
+
+    # Compute average loss and accuracy for the test set
+    test_loss /= len(test_loader.dataset)
+    accuracy = 100.0 * correct / len(test_loader.dataset)
+
+    print(
+        "\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)\n".format(
+            test_loss, correct, len(test_loader.dataset), accuracy
+        )
+    )
+    return test_loss, accuracy

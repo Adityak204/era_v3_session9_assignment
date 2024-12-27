@@ -23,7 +23,7 @@ from torch.cuda.amp import autocast, GradScaler
 
 # Import custom libraries
 from src.classifier import ResNet
-from src.utils import train, test, seed_everything
+from src.utils import train, test, seed_everything, train_mp, test_mp
 
 
 class Trainer:
@@ -148,7 +148,7 @@ class Trainer:
                 print(f"Checkpoint saved to {checkpoint_path}")
 
 
-class TrainerMP:
+class Trainer:
     def __init__(
         self,
         model,
@@ -172,8 +172,6 @@ class TrainerMP:
         self.num_workers = num_workers
         self.epochs = epochs
         self.artifact_path = artifact_path
-        # Initialize gradient scaler for mixed precision training
-        self.scaler = GradScaler()
 
     def data_loader(self):
         train_transformation = transforms.Compose(
@@ -185,6 +183,7 @@ class TrainerMP:
                     antialias=True,
                 ),
                 transforms.RandomHorizontalFlip(0.5),
+                # Normalize the pixel values (in R, G, and B channels)
                 transforms.Normalize(
                     mean=[0.485, 0.485, 0.406], std=[0.229, 0.224, 0.225]
                 ),
@@ -208,6 +207,7 @@ class TrainerMP:
                 transforms.ToTensor(),
                 transforms.Resize(size=256, antialias=True),
                 transforms.CenterCrop(224),
+                # Normalize the pixel values (in R, G, and B channels)
                 transforms.Normalize(
                     mean=[0.485, 0.485, 0.406], std=[0.229, 0.224, 0.225]
                 ),
@@ -226,53 +226,6 @@ class TrainerMP:
 
         return train_loader, val_loader
 
-    def train(self, model, device, train_loader, optimizer, epoch):
-        model.train()
-        for batch_idx, (data, target) in enumerate(train_loader):
-            data, target = data.to(device), target.to(device)
-            optimizer.zero_grad()
-
-            # Runs the forward pass with autocasting
-            with autocast():
-                output = model(data)
-                loss = nn.CrossEntropyLoss()(output, target)
-
-            # Scales loss and calls backward() to create scaled gradients
-            self.scaler.scale(loss).backward()
-
-            # Unscales gradients and calls or skips optimizer.step()
-            self.scaler.step(optimizer)
-
-            # Updates the scale for next iteration
-            self.scaler.update()
-
-            if batch_idx % 100 == 0:
-                print(
-                    f"Train Epoch: {epoch} [{batch_idx * len(data)}/{len(train_loader.dataset)} "
-                    f"({100. * batch_idx / len(train_loader):.0f}%)]\tLoss: {loss.item():.6f}"
-                )
-
-    def test(self, model, device, val_loader):
-        model.eval()
-        test_loss = 0
-        correct = 0
-        with torch.no_grad():
-            for data, target in val_loader:
-                data, target = data.to(device), target.to(device)
-                with autocast():
-                    output = model(data)
-                    test_loss += nn.CrossEntropyLoss()(output, target).item()
-                pred = output.argmax(dim=1, keepdim=True)
-                correct += pred.eq(target.view_as(pred)).sum().item()
-
-        test_loss /= len(val_loader.dataset)
-        accuracy = 100.0 * correct / len(val_loader.dataset)
-        print(
-            f"\nTest set: Average loss: {test_loss:.4f}, "
-            f"Accuracy: {correct}/{len(val_loader.dataset)} ({accuracy:.2f}%)\n"
-        )
-        return test_loss, accuracy
-
     def main(self):
         train_loader, val_loader = self.data_loader()
         model = self.model.to(self.device)
@@ -282,30 +235,41 @@ class TrainerMP:
         optimizer = self.optimizer
         scheduler = self.scheduler
 
+        # Initialize the best accuracy tracker
         best_acc = 0.0
+
+        # Initialize the mixed precision scaler
+        scaler = GradScaler()
+
         for epoch in range(1, self.epochs + 1):
             print(f"********* Epoch = {epoch} *********")
-            self.train(model, self.device, train_loader, optimizer, epoch)
-            _, acc = self.test(model, self.device, val_loader)
+            train_loss, train_acc = train(
+                model, self.device, train_loader, optimizer, epoch, scaler
+            )
+            _, acc = test(model, self.device, val_loader)
             scheduler.step(acc)
             print("LR = ", scheduler.get_last_lr())
 
+            # Save model checkpoint if the accuracy improves
             if acc > best_acc:
                 print(
                     f"Test accuracy improved from {best_acc:.4f} to {acc:.4f}. Saving model..."
                 )
                 best_acc = acc
 
+                # Save the model checkpoint with optimizer state, epoch, and learning rate
                 checkpoint = {
                     "epoch": epoch,
                     "model_state_dict": model.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "scheduler_state_dict": scheduler.state_dict(),
-                    "scaler_state_dict": self.scaler.state_dict(),  # Save scaler state
                     "accuracy": acc,
-                    "learning_rate": scheduler.get_last_lr()[0],
+                    "learning_rate": scheduler.get_last_lr()[
+                        0
+                    ],  # Assuming a single LR value for simplicity
                 }
 
+                # Create a file path to save the checkpoint
                 checkpoint_path = (
                     f"{self.artifact_path}/best_model_epoch_{epoch}_acc_{acc:.4f}.pth"
                 )
