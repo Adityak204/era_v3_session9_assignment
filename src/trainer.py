@@ -73,7 +73,7 @@ class Trainer:
         train_sampler = torch.utils.data.RandomSampler(train_dataset)
         train_loader = torch.utils.data.DataLoader(
             train_dataset,
-            batch_size=self.batch,
+            batch_size=self.batch_size,
             sampler=train_sampler,
             num_workers=self.num_workers,
             pin_memory=True,
