@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from functools import partial
 from typing import Any, Callable, List, Optional, Type, Union
 from torch import Tensor
+from torch.cuda import amp
 
 
 def conv3x3(
@@ -64,6 +65,7 @@ class Bottleneck(nn.Module):
         self.downsample = downsample
         self.stride = stride
 
+    @amp.autocast()
     def forward(self, x: Tensor) -> Tensor:
         identity = x
 
@@ -176,5 +178,6 @@ class ResNet(nn.Module):
 
         return x
 
+    @amp.autocast()
     def forward(self, x: Tensor) -> Tensor:
         return self._forward_impl(x)

@@ -148,7 +148,7 @@ class Trainer:
                 print(f"Checkpoint saved to {checkpoint_path}")
 
 
-class Trainer:
+class TrainerMP:
     def __init__(
         self,
         model,
@@ -243,19 +243,19 @@ class Trainer:
 
         for epoch in range(1, self.epochs + 1):
             print(f"********* Epoch = {epoch} *********")
-            train_loss, train_acc = train(
+            train_loss, train_acc = train_mp(
                 model, self.device, train_loader, optimizer, epoch, scaler
             )
-            _, acc = test(model, self.device, val_loader)
-            scheduler.step(acc)
+            _, test_acc = test_mp(model, self.device, val_loader)
+            scheduler.step(test_acc)
             print("LR = ", scheduler.get_last_lr())
 
             # Save model checkpoint if the accuracy improves
-            if acc > best_acc:
+            if test_acc > best_acc:
                 print(
-                    f"Test accuracy improved from {best_acc:.4f} to {acc:.4f}. Saving model..."
+                    f"Test accuracy improved from {best_acc:.4f} to {test_acc:.4f}. Saving model..."
                 )
-                best_acc = acc
+                best_acc = test_acc
 
                 # Save the model checkpoint with optimizer state, epoch, and learning rate
                 checkpoint = {
@@ -263,15 +263,13 @@ class Trainer:
                     "model_state_dict": model.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "scheduler_state_dict": scheduler.state_dict(),
-                    "accuracy": acc,
+                    "accuracy": test_acc,
                     "learning_rate": scheduler.get_last_lr()[
                         0
                     ],  # Assuming a single LR value for simplicity
                 }
 
                 # Create a file path to save the checkpoint
-                checkpoint_path = (
-                    f"{self.artifact_path}/best_model_epoch_{epoch}_acc_{acc:.4f}.pth"
-                )
+                checkpoint_path = f"{self.artifact_path}/best_model_epoch_{epoch}_acc_{test_acc:.4f}.pth"
                 torch.save(checkpoint, checkpoint_path)
                 print(f"Checkpoint saved to {checkpoint_path}")
