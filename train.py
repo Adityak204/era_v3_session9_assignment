@@ -1,7 +1,7 @@
 import json
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 from PIL import Image
 import warnings
 
@@ -65,7 +65,7 @@ if __name__ == "__main__":
         "train_path": "/home/ec2-user/ebs/volumes/imagenet/ILSVRC/Data/CLS-LOC/train",
         "val_path": "/home/ec2-user/ebs/volumes/imagenet/imagenet_validation",
         "batch_size": 512,
-        "num_workers": multiprocessing.cpu_count(),
+        "num_workers": 4 * torch.cuda.device_count(),
         "epochs": 100,
         "artifact_path": "/home/ec2-user/ebs/volumes/era_session9",
     }
