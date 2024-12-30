@@ -263,7 +263,7 @@ class TrainerMP:
                 model, self.device, train_loader, optimizer, epoch, scaler
             )
             test_loss, test_acc = test_mp(model, self.device, val_loader)
-            scheduler.step(test_acc)
+            scheduler.step()
             print("LR = ", scheduler.get_last_lr())
 
             # Log metrics
