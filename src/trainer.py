@@ -9,6 +9,7 @@ warnings.filterwarnings("ignore")
 import os
 import time
 import json
+from loguru import logger
 
 # Import PyTorch libraries
 import torch
@@ -178,33 +179,12 @@ class TrainerMP:
 
         # Create log directory if it doesn't exist
         os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
-
-        # Initialize log file
-        with open(self.log_path, "w") as log_file:
-            json.dump([], log_file)  # Start with an empty JSON array
-
-    def log_metrics(
-        self, epoch, batch_size, train_loss, train_acc, test_loss, test_acc
-    ):
-        # Load existing logs
-        with open(self.log_path, "r") as log_file:
-            logs = json.load(log_file)
-
-        # Append new metrics
-        logs.append(
-            {
-                "epoch": epoch,
-                "batch_size": batch_size,
-                "train_loss": train_loss,
-                "train_acc": train_acc,
-                "test_loss": test_loss,
-                "test_acc": test_acc,
-            }
+        logger.add(
+            self.log_file_path,
+            format="{time} {level} {message}",
+            level="INFO",
+            rotation="10 MB",
         )
-
-        # Save updated logs
-        with open(self.log_path, "w") as log_file:
-            json.dump(logs, log_file, indent=4)
 
     def data_loader(self):
         train_transformation = transforms.Compose(
@@ -275,7 +255,7 @@ class TrainerMP:
         scaler = GradScaler()
 
         for epoch in range(1, self.epochs + 1):
-            print(f"********* Epoch = {epoch} *********")
+            logger.info(f"********* Epoch {epoch}/{self.epochs} *********")
             train_loss, train_acc = train_mp(
                 model, self.device, train_loader, optimizer, epoch, scaler
             )
@@ -284,9 +264,12 @@ class TrainerMP:
             print("LR = ", scheduler.get_last_lr())
 
             # Log metrics
-            self.log_metrics(
-                epoch, self.batch_size, train_loss, train_acc, test_loss, test_acc
+            logger.info(f"Epoch: {epoch}")
+            logger.info(
+                f"Train Loss: {train_loss:.4f}, Train Accuracy: {train_acc:.4f}"
             )
+            logger.info(f"Test Loss: {test_loss:.4f}, Test Accuracy: {test_acc:.4f}")
+            logger.info(f"Learning Rate: {scheduler.get_last_lr()[0]:.6f}")
 
             # Save model checkpoint if the accuracy improves
             if test_acc > best_acc:

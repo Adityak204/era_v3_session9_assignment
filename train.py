@@ -1,6 +1,7 @@
 import json
 import numpy as np
 import pandas as pd
+
 # import matplotlib.pyplot as plt
 from PIL import Image
 import warnings
@@ -68,6 +69,7 @@ if __name__ == "__main__":
         "num_workers": 4 * torch.cuda.device_count(),
         "epochs": 100,
         "artifact_path": "/home/ec2-user/ebs/volumes/era_session9",
+        "log_path": "/home/ec2-user/ebs/volumes/era_session9",
     }
 
     optimizer = optim.SGD(
@@ -100,5 +102,6 @@ if __name__ == "__main__":
         num_workers=config["num_workers"],
         epochs=config["epochs"],
         artifact_path=config["artifact_path"],
+        log_path=config["log_path"],
     )
     training.main()
