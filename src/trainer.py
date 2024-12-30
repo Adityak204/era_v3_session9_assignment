@@ -254,6 +254,9 @@ class TrainerMP:
         # Initialize the mixed precision scaler
         scaler = GradScaler()
 
+        # Before training loop
+        torch.cuda.empty_cache()
+        torch.backends.cudnn.benchmark = True
         for epoch in range(1, self.epochs + 1):
             logger.info(f"********* Epoch {epoch}/{self.epochs} *********")
             train_loss, train_acc = train_mp(
