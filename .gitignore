@@ -64,3 +64,4 @@ runs/
 checkpoints/
 outputs/
 logs/ 
+lightning_logs/

@@ -29,6 +29,7 @@ import multiprocessing
 from src.classifier import ResNet, Bottleneck
 from src.utils import train, test, seed_everything
 from src.trainer import Trainer, TrainerMP
+from datetime import datetime
 
 if __name__ == "__main__":
     # Set seed for reproducibility
@@ -62,6 +63,9 @@ if __name__ == "__main__":
         num_workers=multiprocessing.cpu_count(),
         pin_memory=True,
     )
+    
+    now = datetime.now()
+    formatted_date_time = now.strftime("%Y-%m-%d %H:%M:%S")
     config = {
         "train_path": "/home/ec2-user/ebs/volumes/imagenet/ILSVRC/Data/CLS-LOC/train",
         "val_path": "/home/ec2-user/ebs/volumes/imagenet/imagenet_validation",
@@ -69,7 +73,7 @@ if __name__ == "__main__":
         "num_workers": 4 * torch.cuda.device_count(),
         "epochs": 40,
         "artifact_path": "/home/ec2-user/ebs/volumes/era_session9",
-        "log_path": "/home/ec2-user/ebs/volumes/era_session9/training_log.log",
+        "log_path": f"/home/ec2-user/ebs/volumes/era_session9/training_log_{formatted_date_time}.log",
     }
 
     optimizer = optim.SGD(

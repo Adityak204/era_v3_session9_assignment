@@ -81,15 +81,12 @@ def test(model, device, test_loader):
 
 
 def seed_everything(seed=42):
-    os.environ["PYTHONHASHSEED"] = str(seed)
-    random.seed(seed)
-    np.random.seed(seed)
+    """Set seeds for reproducibility"""
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    # some cudnn methods can be random even after fixing the seed
-    # unless you tell it to be deterministic
     torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 def show_image(image, label):
@@ -100,21 +97,22 @@ def show_image(image, label):
 
 
 # Mixed precision training function
+# Fix in train_mp function - adjust loss calculation
 def train_mp(model, device, train_loader, optimizer, epoch, scaler):
     model.train()
     train_loss = 0
     correct = 0
     total = 0
     pbar = tqdm(train_loader)
+    criterion = nn.CrossEntropyLoss()  # Move criterion outside the loop
 
     for batch_idx, (data, target) in enumerate(pbar):
         data, target = data.to(device), target.to(device)
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)  # More efficient way to zero gradients
 
         # Mixed precision training: Use autocast for forward pass
         with autocast():
             output = model(data)
-            criterion = nn.CrossEntropyLoss()
             loss = criterion(output, target)
 
         # Backward pass with scaled gradients
@@ -123,7 +121,7 @@ def train_mp(model, device, train_loader, optimizer, epoch, scaler):
         scaler.update()
 
         # Compute accuracy
-        train_loss += loss.item()  # accumulate batch loss
+        train_loss += loss.item() * target.size(0)  # Multiply by batch size for correct averaging
         _, pred = output.max(1)
         correct += pred.eq(target).sum().item()
         total += target.size(0)
@@ -132,7 +130,7 @@ def train_mp(model, device, train_loader, optimizer, epoch, scaler):
         pbar.set_description(desc=f"loss={loss.item():.4f} batch_id={batch_idx}")
 
     # Compute average loss and accuracy for the epoch
-    avg_loss = train_loss / len(train_loader.dataset)
+    avg_loss = train_loss / total  # Corrected average loss calculation
     accuracy = 100.0 * correct / total
 
     print(
@@ -140,33 +138,36 @@ def train_mp(model, device, train_loader, optimizer, epoch, scaler):
     )
     return avg_loss, accuracy
 
-
+# Fix in test_mp function - adjust loss calculation and add autocast
 def test_mp(model, device, test_loader):
     model.eval()
     test_loss = 0
     correct = 0
+    total = 0
+    criterion = nn.CrossEntropyLoss()
 
     with torch.no_grad():
         for data, target in test_loader:
             data, target = data.to(device), target.to(device)
-            output = model(data)
+            with autocast():  # Add autocast for consistency with training
+                output = model(data)
+                loss = criterion(output, target)
 
             # Compute loss
-            criterion = nn.CrossEntropyLoss()
-            loss = criterion(output, target)
-            test_loss += loss.item()
+            test_loss += loss.item() * target.size(0)  # Multiply by batch size for correct averaging
+            total += target.size(0)
 
             # Compute accuracy
             _, pred = output.max(1)
             correct += pred.eq(target).sum().item()
 
     # Compute average loss and accuracy for the test set
-    test_loss /= len(test_loader.dataset)
-    accuracy = 100.0 * correct / len(test_loader.dataset)
+    test_loss /= total  # Corrected average loss calculation
+    accuracy = 100.0 * correct / total
 
     print(
         "\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)\n".format(
-            test_loss, correct, len(test_loader.dataset), accuracy
+            test_loss, correct, total, accuracy
         )
     )
     return test_loss, accuracy

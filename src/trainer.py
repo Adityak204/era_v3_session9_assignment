@@ -218,7 +218,7 @@ class TrainerMP:
                 transforms.RandomHorizontalFlip(0.5),
                 # Normalize the pixel values (in R, G, and B channels)
                 transforms.Normalize(
-                    mean=[0.485, 0.485, 0.406], std=[0.229, 0.224, 0.225]
+                    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
                 ),
             ]
         )
@@ -267,7 +267,6 @@ class TrainerMP:
 
         # Before training loop
         torch.cuda.empty_cache()
-        torch.backends.cudnn.benchmark = True
         optimizer = self.optimizer
         scheduler = self.scheduler
 
@@ -283,8 +282,13 @@ class TrainerMP:
                 model, self.device, train_loader, optimizer, epoch, scaler
             )
             test_loss, test_acc = test_mp(model, self.device, val_loader)
-            scheduler.step()
-            print("LR = ", scheduler.get_last_lr())
+            # Learning rate scheduling
+            if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                scheduler.step(test_loss)
+            else:
+                scheduler.step()
+            current_lr = scheduler.get_last_lr()[0] if not isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau) else optimizer.param_groups[0]['lr']
+            logger.info(f"Current Learning Rate: {current_lr:.6f}")
 
             # Log metrics
             logger.info(f"Epoch: {epoch}")
@@ -304,13 +308,13 @@ class TrainerMP:
                 # Save the model checkpoint with optimizer state, epoch, and learning rate
                 checkpoint = {
                     "epoch": epoch,
-                    "model_state_dict": model.state_dict(),
+                    "model_state_dict": model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "scheduler_state_dict": scheduler.state_dict(),
-                    "accuracy": test_acc,
-                    "learning_rate": scheduler.get_last_lr()[
-                        0
-                    ],  # Assuming a single LR value for simplicity
+                    'scaler_state_dict': scaler.state_dict(),
+                    'accuracy': test_acc,
+                    'loss': test_loss,
+                    'learning_rate': current_lr,
                 }
 
                 # Create a file path to save the checkpoint

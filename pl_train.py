@@ -31,9 +31,10 @@ class ImageNetModule(LightningModule):
         max_epochs: int = 90,
         train_path: str = "path/to/imagenet",
         val_path: str = "path/to/imagenet",
+        checkpoint_dir: str = "checkpoints"
     ):
         super().__init__()
-        self.save_hyperparameters()
+        # self.save_hyperparameters()
         
         # Model
         self.model = models.resnet50(weights=None)
@@ -47,10 +48,12 @@ class ImageNetModule(LightningModule):
         self.max_epochs = max_epochs
         self.train_path = train_path
         self.val_path = val_path
+        self.checkpoint_dir = checkpoint_dir
         
         # Metrics tracking
         self.training_step_outputs = []
         self.validation_step_outputs = []
+        self.best_val_acc = 0.0
         
         # Set up transforms
         self.train_transforms = transforms.Compose([
@@ -81,7 +84,7 @@ class ImageNetModule(LightningModule):
         # Calculate accuracy
         _, predicted = torch.max(outputs.data, 1)
         correct = (predicted == labels).sum().item()
-        accuracy = correct / labels.size(0)
+        accuracy = (correct / labels.size(0))*100
         
         # Log metrics for this step
         self.log('train_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
@@ -113,11 +116,11 @@ class ImageNetModule(LightningModule):
         # Calculate accuracy
         _, predicted = torch.max(outputs.data, 1)
         correct = (predicted == labels).sum().item()
-        accuracy = correct / labels.size(0)
+        accuracy = (correct / labels.size(0))*100
         
         # Log metrics for this step
-        self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True,)
-        self.log('val_acc', accuracy, on_step=False, on_epoch=True, prog_bar=True,)
+        self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log('val_acc', accuracy, on_step=False, on_epoch=True, prog_bar=True)
         
         self.validation_step_outputs.append({
             'val_loss': loss.detach(),
@@ -131,8 +134,18 @@ class ImageNetModule(LightningModule):
         avg_acc = torch.stack([x['val_acc'] for x in self.validation_step_outputs]).mean()
         
         # Log final validation metrics
-        self.log('val_loss_epoch', avg_loss,)
-        self.log('val_acc', avg_acc,)
+        self.log('val_loss_epoch', avg_loss)
+        self.log('val_acc_epoch', avg_acc)
+        
+        # Save checkpoint if validation accuracy improves
+        if avg_acc > self.best_val_acc:
+            self.best_val_acc = avg_acc
+            checkpoint_path = os.path.join(
+                self.checkpoint_dir,
+                f"resnet50-epoch{self.current_epoch:02d}-acc{avg_acc:.4f}.ckpt"
+            )
+            self.trainer.save_checkpoint(checkpoint_path)
+            logger.info(f"New best validation accuracy: {avg_acc:.4f}. Saved checkpoint to {checkpoint_path}")
         
         logger.info(f"Validation metrics - Loss: {avg_loss:.4f}, Accuracy: {avg_acc:.4f}")
         
@@ -195,17 +208,11 @@ class ImageNetModule(LightningModule):
         }
 
 def setup_logging(log_dir="logs"):
-    # Create logs directory if it doesn't exist
     os.makedirs(log_dir, exist_ok=True)
-    
-    # Generate log filename with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_file = os.path.join(log_dir, f"training_{timestamp}.log")
     
-    # Remove default handler
     logger.remove()
-    
-    # Add console handler with colored output
     logger.add(
         lambda msg: print(msg),
         format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | {message}",
@@ -213,23 +220,21 @@ def setup_logging(log_dir="logs"):
         level="INFO"
     )
     
-    # Add file handler
     logger.add(
         log_file,
         format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
         level="INFO",
-        rotation="100 MB",  # Rotate when file reaches 100MB
-        retention="30 days"  # Keep logs for 30 days
+        rotation="100 MB",
+        retention="30 days"
     )
     
     logger.info(f"Logging setup complete. Logs will be saved to: {log_file}")
     return log_file
 
 def main():
-    # Set up logging
-    log_file = setup_logging(log_dir="/home/ec2-user/ebs/volumes/era_session9")
+    checkpoint_dir = "/home/ec2-user/ebs/volumes/era_session9"
+    log_file = setup_logging(log_dir=checkpoint_dir)
     
-    # Log system information
     logger.info("Starting training with configuration:")
     logger.info(f"PyTorch version: {torch.__version__}")
     logger.info(f"CUDA available: {torch.cuda.is_available()}")
@@ -237,50 +242,37 @@ def main():
         logger.info(f"CUDA device count: {torch.cuda.device_count()}")
         logger.info(f"CUDA devices: {[torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())]}")
     
-    # Initialize model and trainer
     model = ImageNetModule(
         learning_rate=0.156,
         batch_size=256,
         num_workers=16,
         max_epochs=40,
-        train_path = "/home/ec2-user/ebs/volumes/imagenet/ILSVRC/Data/CLS-LOC/train",
-        val_path = "/home/ec2-user/ebs/volumes/imagenet/imagenet_validation",
+        train_path="/home/ec2-user/ebs/volumes/imagenet/ILSVRC/Data/CLS-LOC/train",
+        val_path="/home/ec2-user/ebs/volumes/imagenet/imagenet_validation",
+        checkpoint_dir=checkpoint_dir
     )
     
-    # Log model configuration
     logger.info(f"Model configuration:")
     logger.info(f"Learning rate: {model.learning_rate}")
     logger.info(f"Batch size: {model.batch_size}")
     logger.info(f"Number of workers: {model.num_workers}")
     logger.info(f"Max epochs: {model.max_epochs}")
     
-    # Callbacks
-    checkpoint_callback = ModelCheckpoint(
-        dirpath="/home/ec2-user/ebs/volumes/era_session9",
-        filename="resnet50-{epoch:02d}-{val_acc:.2f}",
-        monitor="val_acc",
-        mode="max",
-        verbose=True
-    )
-    
     progress_bar = CustomProgressBar()
     
-    # Initialize trainer
     trainer = Trainer(
         max_epochs=40,
         accelerator="gpu",
         devices=4,
         strategy="ddp",
         precision=16,
-        callbacks=[checkpoint_callback, progress_bar],
+        callbacks=[progress_bar],
         enable_progress_bar=True,
     )
     
-    # Log training start
     logger.info("Starting training")
     
     try:
-        # Start training
         trainer.fit(model)
         logger.info("Training completed successfully")
     except Exception as e:
