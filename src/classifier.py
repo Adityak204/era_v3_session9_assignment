@@ -65,7 +65,7 @@ class Bottleneck(nn.Module):
         self.downsample = downsample
         self.stride = stride
 
-    @amp.autocast()
+    # @amp.autocast()
     def forward(self, x: Tensor) -> Tensor:
         identity = x
 
@@ -178,6 +178,6 @@ class ResNet(nn.Module):
 
         return x
 
-    @amp.autocast()
+    # @amp.autocast()
     def forward(self, x: Tensor) -> Tensor:
         return self._forward_impl(x)

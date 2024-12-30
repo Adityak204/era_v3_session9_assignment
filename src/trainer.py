@@ -41,6 +41,7 @@ class Trainer:
         num_workers,
         epochs,
         artifact_path,
+        log_path,
     ):
         self.model = model
         self.optimizer = optimizer
@@ -52,6 +53,16 @@ class Trainer:
         self.num_workers = num_workers
         self.epochs = epochs
         self.artifact_path = artifact_path
+        self.log_path = log_path
+
+        # Create log directory if it doesn't exist
+        os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
+        logger.add(
+            self.log_path,
+            format="{time} {level} {message}",
+            level="INFO",
+            rotation="10 MB",
+        )
 
     def data_loader(self):
         train_transformation = transforms.Compose(
@@ -118,17 +129,26 @@ class Trainer:
         # Initialize the best accuracy tracker
         best_acc = 0.0
         for epoch in range(1, self.epochs + 1):
-            print(f"********* Epoch = {epoch} *********")
-            train(model, self.device, train_loader, optimizer, epoch)
-            _, acc = test(model, self.device, val_loader)
-            scheduler.step(acc)
+            logger.info(f"********* Epoch {epoch}/{self.epochs} *********")
+            train_loss, train_acc = train(model, self.device, train_loader, optimizer, epoch)
+            test_loss, test_acc = test(model, self.device, val_loader)
+            scheduler.step()
             print("LR = ", scheduler.get_last_lr())
+
+            # Log metrics
+            logger.info(f"Epoch: {epoch}")
+            logger.info(
+                f"Train Loss: {train_loss:.4f}, Train Accuracy: {train_acc:.4f}"
+            )
+            logger.info(f"Test Loss: {test_loss:.4f}, Test Accuracy: {test_acc:.4f}")
+            logger.info(f"Learning Rate: {scheduler.get_last_lr()[0]:.6f}")
+
             # Save model checkpoint if the accuracy improves
-            if acc > best_acc:
+            if test_acc > best_acc:
                 print(
                     f"Test accuracy improved from {best_acc:.4f} to {acc:.4f}. Saving model..."
                 )
-                best_acc = acc
+                best_acc = test_acc
 
                 # Save the model checkpoint with optimizer state, epoch, and learning rate
                 checkpoint = {
@@ -136,7 +156,7 @@ class Trainer:
                     "model_state_dict": model.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "scheduler_state_dict": scheduler.state_dict(),
-                    "accuracy": acc,
+                    "accuracy": test_acc,
                     "learning_rate": scheduler.get_last_lr()[
                         0
                     ],  # Assuming a single LR value for simplicity
@@ -180,7 +200,7 @@ class TrainerMP:
         # Create log directory if it doesn't exist
         os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
         logger.add(
-            self.log_file_path,
+            self.log_path,
             format="{time} {level} {message}",
             level="INFO",
             rotation="10 MB",

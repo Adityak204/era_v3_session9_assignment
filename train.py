@@ -28,7 +28,7 @@ import multiprocessing
 # Import custom libraries
 from src.classifier import ResNet, Bottleneck
 from src.utils import train, test, seed_everything
-from src.trainer import Trainer
+from src.trainer import Trainer, TrainerMP
 
 if __name__ == "__main__":
     # Set seed for reproducibility
@@ -67,9 +67,9 @@ if __name__ == "__main__":
         "val_path": "/home/ec2-user/ebs/volumes/imagenet/imagenet_validation",
         "batch_size": 512,
         "num_workers": 4 * torch.cuda.device_count(),
-        "epochs": 100,
+        "epochs": 40,
         "artifact_path": "/home/ec2-user/ebs/volumes/era_session9",
-        "log_path": "/home/ec2-user/ebs/volumes/era_session9",
+        "log_path": "/home/ec2-user/ebs/volumes/era_session9/training_log.log",
     }
 
     optimizer = optim.SGD(
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     )
     scheduler = torch.optim.lr_scheduler.OneCycleLR(
         optimizer,
-        max_lr=0.351,
+        max_lr=0.156,
         epochs=config["epochs"],
         steps_per_epoch=len(train_loader),
         pct_start=0.3,
