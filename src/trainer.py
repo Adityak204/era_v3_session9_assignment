@@ -8,6 +8,7 @@ import warnings
 warnings.filterwarnings("ignore")
 import os
 import time
+import json
 
 # Import PyTorch libraries
 import torch
@@ -161,6 +162,7 @@ class TrainerMP:
         num_workers,
         epochs,
         artifact_path,
+        log_path,
     ):
         self.model = model
         self.optimizer = optimizer
@@ -172,6 +174,37 @@ class TrainerMP:
         self.num_workers = num_workers
         self.epochs = epochs
         self.artifact_path = artifact_path
+        self.log_path = log_path
+
+        # Create log directory if it doesn't exist
+        os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
+
+        # Initialize log file
+        with open(self.log_path, "w") as log_file:
+            json.dump([], log_file)  # Start with an empty JSON array
+
+    def log_metrics(
+        self, epoch, batch_size, train_loss, train_acc, test_loss, test_acc
+    ):
+        # Load existing logs
+        with open(self.log_path, "r") as log_file:
+            logs = json.load(log_file)
+
+        # Append new metrics
+        logs.append(
+            {
+                "epoch": epoch,
+                "batch_size": batch_size,
+                "train_loss": train_loss,
+                "train_acc": train_acc,
+                "test_loss": test_loss,
+                "test_acc": test_acc,
+            }
+        )
+
+        # Save updated logs
+        with open(self.log_path, "w") as log_file:
+            json.dump(logs, log_file, indent=4)
 
     def data_loader(self):
         train_transformation = transforms.Compose(
@@ -246,9 +279,14 @@ class TrainerMP:
             train_loss, train_acc = train_mp(
                 model, self.device, train_loader, optimizer, epoch, scaler
             )
-            _, test_acc = test_mp(model, self.device, val_loader)
+            test_loss, test_acc = test_mp(model, self.device, val_loader)
             scheduler.step(test_acc)
             print("LR = ", scheduler.get_last_lr())
+
+            # Log metrics
+            self.log_metrics(
+                epoch, self.batch_size, train_loss, train_acc, test_loss, test_acc
+            )
 
             # Save model checkpoint if the accuracy improves
             if test_acc > best_acc:
