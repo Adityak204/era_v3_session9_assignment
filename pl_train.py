@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 from typing import Optional, Tuple
+import glob
 
 import torch
 import torch.nn as nn
@@ -231,6 +232,67 @@ def setup_logging(log_dir="logs"):
     logger.info(f"Logging setup complete. Logs will be saved to: {log_file}")
     return log_file
 
+def find_latest_checkpoint(checkpoint_dir: str) -> Optional[str]:
+    """Find the latest checkpoint file using various possible naming patterns."""
+    # Look for checkpoint files with different possible patterns
+    patterns = [
+        "*.ckpt",  # Generic checkpoint files
+        "resnet50-epoch*.ckpt",  # Our custom format
+        "*epoch=*.ckpt",  # PyTorch Lightning default format
+        "checkpoint_epoch*.ckpt"  # Another common format
+    ]
+    
+    all_checkpoints = []
+    for pattern in patterns:
+        checkpoint_pattern = os.path.join(checkpoint_dir, pattern)
+        all_checkpoints.extend(glob.glob(checkpoint_pattern))
+    
+    if not all_checkpoints:
+        logger.info("No existing checkpoints found.")
+        return None
+    
+    def extract_info(checkpoint_path: str) -> Tuple[int, float]:
+        """Extract epoch and optional accuracy from checkpoint filename."""
+        filename = os.path.basename(checkpoint_path)
+        
+        # Try different patterns to extract epoch number
+        epoch_patterns = [
+            r'epoch=(\d+)',  # matches epoch=X
+            r'epoch(\d+)',   # matches epochX
+            r'epoch[_-](\d+)',  # matches epoch_X or epoch-X
+        ]
+        
+        epoch = None
+        for pattern in epoch_patterns:
+            match = re.search(pattern, filename)
+            if match:
+                epoch = int(match.group(1))
+                break
+        
+        # If no epoch found, try to get from file modification time
+        if epoch is None:
+            epoch = int(os.path.getmtime(checkpoint_path))
+        
+        # Try to extract accuracy if present
+        acc_match = re.search(r'acc[_-]?([\d.]+)', filename)
+        acc = float(acc_match.group(1)) if acc_match else 0.0
+        
+        return epoch, acc
+    
+    try:
+        latest_checkpoint = max(all_checkpoints, key=lambda x: extract_info(x)[0])
+        epoch, acc = extract_info(latest_checkpoint)
+        logger.info(f"Found latest checkpoint: {latest_checkpoint}")
+        logger.info(f"Epoch: {epoch}" + (f", Accuracy: {acc:.4f}" if acc > 0 else ""))
+        return latest_checkpoint
+    except Exception as e:
+        logger.error(f"Error processing checkpoints: {str(e)}")
+        # If there's any error in parsing, return the most recently modified file
+        latest_checkpoint = max(all_checkpoints, key=os.path.getmtime)
+        logger.info(f"Falling back to most recently modified checkpoint: {latest_checkpoint}")
+        return latest_checkpoint
+
+
 def main():
     checkpoint_dir = "/home/ec2-user/ebs/volumes/era_session9"
     log_file = setup_logging(log_dir=checkpoint_dir)
@@ -242,11 +304,15 @@ def main():
         logger.info(f"CUDA device count: {torch.cuda.device_count()}")
         logger.info(f"CUDA devices: {[torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())]}")
     
+    # Find latest checkpoint
+    # latest_checkpoint = find_latest_checkpoint(checkpoint_dir)
+    latest_checkpoint = "/home/ec2-user/ebs/volumes/era_session9/resnet50-epoch18-acc53.7369.ckpt"
+    
     model = ImageNetModule(
         learning_rate=0.156,
         batch_size=256,
         num_workers=16,
-        max_epochs=40,
+        max_epochs=60,
         train_path="/home/ec2-user/ebs/volumes/imagenet/ILSVRC/Data/CLS-LOC/train",
         val_path="/home/ec2-user/ebs/volumes/imagenet/imagenet_validation",
         checkpoint_dir=checkpoint_dir
@@ -273,7 +339,13 @@ def main():
     logger.info("Starting training")
     
     try:
-        trainer.fit(model)
+        if latest_checkpoint:
+            logger.info(f"Resuming training from checkpoint: {latest_checkpoint}")
+            trainer.fit(model, ckpt_path=latest_checkpoint)
+        else:
+            logger.info("Starting training from scratch")
+            trainer.fit(model)
+            
         logger.info("Training completed successfully")
     except Exception as e:
         logger.error(f"Training failed with error: {str(e)}")
@@ -283,3 +355,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # pass
