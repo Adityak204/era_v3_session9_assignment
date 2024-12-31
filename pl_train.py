@@ -99,6 +99,9 @@ class ImageNetModule(LightningModule):
         return loss
 
     def on_train_epoch_end(self):
+        if not self.training_step_outputs:
+            print("Warning: No training outputs available for this epoch")
+            return
         avg_loss = torch.stack([x['loss'] for x in self.training_step_outputs]).mean()
         avg_acc = torch.stack([x['acc'] for x in self.training_step_outputs]).mean()
         
@@ -327,7 +330,7 @@ def main():
     progress_bar = CustomProgressBar()
     
     trainer = Trainer(
-        max_epochs=40,
+        max_epochs=60,
         accelerator="gpu",
         devices=4,
         strategy="ddp",
