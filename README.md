@@ -7,7 +7,7 @@ Imagenet-1k dataset has 1,281,167 training images and 50,000 validation images w
 ## Running on model on HuggingFace
 Model is available on HuggingFace model hub. You test the model here: (https://huggingface.co/spaces/Adityak204/ResNetVision-1K)
 ### screenshot from huggingface
-![image](imagenet-1k/data/hf-screenshot.png)
+![image](data/hf-screenshot.png)
 
 ## Data Source
 The Imagenet-1k dataset was downloaded from kaggle. You can download the dataset from 
