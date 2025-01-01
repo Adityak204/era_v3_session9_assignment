@@ -6,8 +6,8 @@ Imagenet-1k dataset has 1,281,167 training images and 50,000 validation images w
 
 ## Data Source
 The Imagenet-1k dataset was downloaded from kaggle. You can download the dataset from 
-- Training = [here](https://www.kaggle.com/c/imagenet-object-localization-challenge/data).
-- Validation = [here] (https://www.kaggle.com/datasets/tusonggao/imagenet-validation-dataset)
+- Training : https://www.kaggle.com/c/imagenet-object-localization-challenge/data
+- Validation : https://www.kaggle.com/datasets/tusonggao/imagenet-validation-dataset
 
 ## Process Highlight
 - Created EBS (gp3) volume of 400 GB (as dataset size is ~160 GB zipped version) and attached to EC2 instance.
@@ -34,11 +34,13 @@ The Imagenet-1k dataset was downloaded from kaggle. You can download the dataset
     - Training and Validation logs and model checkpoints were save on EBS
 
 ## Model Highlight and Results
-    - Model used is ResNet50 from PyTorch without pretrained weights
-    - Optimizer used: SGD with momentum of 0.9 and weight decay of 1e-4
-    - One Cycle LR scheduler was used with max_lr=0.15
-    - Model was evaluated on validation dataset and achieved top-1 accuracy of 60.35%
-    - As credits were expiring on AWS, training was stopped after 36 epochs. Model can be further trained to improve the accuracy. (Last epoch LR: 0.137491,  annelaing process was yet to start)
+- Model used is ResNet50 from PyTorch without pretrained weights
+- Optimizer used: SGD with momentum of 0.9 and weight decay of 1e-4
+- One Cycle LR scheduler was used with max_lr=0.15
+- Model was evaluated on validation dataset and achieved top-1 accuracy of 60.35%
+- As credits were expiring on AWS, training was stopped after 36 epochs. 
+- Model can be further trained to improve the accuracy. 
+- (Last epoch LR: 0.137491,  annelaing process was yet to start)
 
 ## Training logs
 ```
@@ -357,7 +359,7 @@ The Imagenet-1k dataset was downloaded from kaggle. You can download the dataset
 
 ```
 
-Spot instance stopped at epoch 18. The training will be resumed from epoch 19.
+Spot instance stopped at epoch 18. The training was resumed from epoch 19.
 
 ```
 2024-12-31 03:44:31 | INFO | Starting training
@@ -554,7 +556,7 @@ Spot instance stopped at epoch 18. The training will be resumed from epoch 19.
 2024-12-31 07:35:48 | INFO | Training metrics - Loss: 1.8489, Accuracy: 57.4578, LR: 0.126785
 ```
 
-Spot instance stopped at epoch 33. The training will be resumed from epoch 34.
+Spot instance stopped at epoch 33. The training was resumed from epoch 34.
 
 ```
 2024-12-31 09:14:20 | INFO | Resuming training from checkpoint: /home/ec2-user/ebs/volumes/era_session9/resnet50-epoch33-acc59.0611.ckpt
