@@ -5,7 +5,8 @@ For training have made use of EC2 instance with GPU support on AWS.
 Imagenet-1k dataset has 1,281,167 training images and 50,000 validation images with 1000 labeled classes.
 
 ## Model running on HuggingFace
-Model is available on HuggingFace model hub. You test the model here: https://huggingface.co/spaces/Adityak204/ResNetVision-1K
+Model is available on HuggingFace model hub. You can test the model here: https://huggingface.co/spaces/Adityak204/ResNetVision-1K
+<br>
 <br>
 Screenshot from huggingface: ![image](data/hf-screenshot.png)
 
