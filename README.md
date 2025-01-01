@@ -4,8 +4,9 @@ Model used here is ResNet50 model from PyTorch without pretrained weights.
 For training have made use of EC2 instance with GPU support on AWS.
 Imagenet-1k dataset has 1,281,167 training images and 50,000 validation images with 1000 labeled classes.
 
-## Running on model on HuggingFace
-Model is available on HuggingFace model hub. You test the model here: (https://huggingface.co/spaces/Adityak204/ResNetVision-1K)
+## Model running on HuggingFace
+Model is available on HuggingFace model hub. You test the model here: https://huggingface.co/spaces/Adityak204/ResNetVision-1K
+<br>
 Screenshot from huggingface: ![image](data/hf-screenshot.png)
 
 ## Data Source
